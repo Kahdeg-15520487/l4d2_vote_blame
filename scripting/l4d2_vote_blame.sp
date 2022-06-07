@@ -46,7 +46,7 @@ public Plugin myinfo =
 	url = ""
 };
 
-ConVar g_bCvarAllow,g_bCvarPrintChat,g_iCvarVoteTime;
+ConVar g_bCvarAllow,g_bCvarPrintChat,g_iCvarVoteTime,g_iCvarVoteCooldown;
 
 char g_ConfigPath[PLATFORM_MAX_PATH];
 
@@ -55,7 +55,8 @@ int g_iNoVotes;
 int g_iPlayersCount;
 bool VoteInProgress;
 bool CanPlayerVote[MAXPLAYERS + 1];
-int g_blamingPlayer;
+int g_iBlamingPlayer;
+int g_iLastVoteTimeStamp;
 
 // ====================================================================================================
 // left4dhooks - Plugin Dependencies
@@ -73,9 +74,9 @@ public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max
 {
     EngineVersion engine = GetEngineVersion();
 
-    if (engine != Engine_Left4Dead && engine != Engine_Left4Dead2)
+    if (engine != Engine_Left4Dead2)
     {
-        strcopy(error, err_max, "This plugin only runs in \"Left 4 Dead\" and \"Left 4 Dead 2\" game");
+        strcopy(error, err_max, "This plugin only runs in \"Left 4 Dead 2\" game");
         return APLRes_SilentFailure;
     }
 
@@ -111,6 +112,8 @@ public void OnPluginStart()
 	g_bCvarAllow = CreateConVar("vote_blame_on", "1", "Enable plugin. 1=Plugin On. 0=Plugin Off", FCVAR_NOTIFY, true, 0.0, true, 1.0);
 	g_bCvarPrintChat = CreateConVar("vote_blame_print_on", "1", "Enable plugin to print to chat. 1=Enable. 0=Disable", FCVAR_NOTIFY, true, 0.0, true, 1.0);
 	g_iCvarVoteTime = CreateConVar("vote_blame_time", "10", "Vote time limit. (5-60)", FCVAR_NOTIFY, true, 5.0, true, 60.0);
+	g_iCvarVoteCooldown = CreateConVar("vote_blame_cooldown", "10", "Vote cooldown. (5-600)", FCVAR_NOTIFY, true, 5.0, true, 600.0);
+	g_iLastVoteTimeStamp = 0;
 	
 	AutoExecConfig(true, CONFIG_FILENAME);
 
@@ -129,6 +132,11 @@ public Action voteblame(int client, int args){
 	
 	if(VoteInProgress){
 		PrintToChat(client,"A vote is already in progress!");
+		return Plugin_Handled;
+	}
+	
+	if (GetTime() - g_iLastVoteTimeStamp < g_iCvarVoteCooldown.IntValue){
+		PrintToChat(client,"You must wait %i seconds before blaming someone",g_iCvarVoteCooldown.IntValue - (GetTime() - g_iLastVoteTimeStamp));
 		return Plugin_Handled;
 	}
 	
@@ -185,7 +193,7 @@ public void Callvote_Handler(int clientIndex)
 	GetClientName(clientIndex, name, sizeof(name));
 	char votemsg[60];
 	Format(votemsg, sizeof(votemsg), "Blame '%s'?",name);
-	g_blamingPlayer = clientIndex;
+	g_iBlamingPlayer = clientIndex;
 	
 	BfWrite bf = UserMessageToBfWrite(StartMessageAll("VoteStart", USERMSG_RELIABLE));
 	bf.WriteByte(L4D2_TEAM_ALL);
@@ -280,13 +288,15 @@ public void UpdateVotes()
 			bf.WriteByte(L4D2_TEAM_ALL);
 			bf.WriteString("#L4D_TargetID_Player");
 			char name[30];
-			GetClientName(g_blamingPlayer, name, sizeof(name));
+			GetClientName(g_iBlamingPlayer, name, sizeof(name));
 			char votemsg[60];
 			Format(votemsg, sizeof(votemsg), "'%s' got blamed!",name);
 			bf.WriteString(votemsg);
 			EndMessage();
 			
-			L4D_CTerrorPlayer_OnVomitedUpon(g_blamingPlayer, g_blamingPlayer);
+			PrintToChat(g_iBlamingPlayer, "You got blamed!");
+			
+			L4D_CTerrorPlayer_OnVomitedUpon(g_iBlamingPlayer, g_iBlamingPlayer);
 		}
 		else
 		{
@@ -294,6 +304,9 @@ public void UpdateVotes()
 			bf.WriteByte(L4D2_TEAM_ALL);
 			EndMessage();
 		}
+		
+		g_iLastVoteTimeStamp = GetTime();
+		g_iBlamingPlayer = 0;
 	}
 }
 
