@@ -106,7 +106,7 @@ public void OnPluginStart()
 	 */
 	CreateConVar("sm_voteblame_version", PLUGIN_VERSION, "Plugin Version.", FCVAR_REPLICATED | FCVAR_NOTIFY | FCVAR_DONTRECORD);
 	g_bCvarAllow = CreateConVar("vote_blame_on", "1", "Enable plugin. 1=Plugin On. 0=Plugin Off", FCVAR_NOTIFY, true, 0.0, true, 1.0);
-	g_bCvarPrintChat = CreateConVar("vote_blame_print_on", "1", "Enable plugin to print to chat. 1=Enable. 0=Disable", FCVAR_NOTIFY, true, 0.0, true, 1.0);
+	g_bCvarPrintChat = CreateConVar("vote_blame_print_on", "0", "Enable plugin to print to chat. 1=Enable. 0=Disable", FCVAR_NOTIFY, true, 0.0, true, 1.0);
 	g_iCvarVoteTime = CreateConVar("vote_blame_time", "10", "Vote time limit. (5-60)", FCVAR_NOTIFY, true, 5.0, true, 60.0);
 	g_iCvarVoteCooldown = CreateConVar("vote_blame_cooldown", "10", "Vote cooldown. (5-600)", FCVAR_NOTIFY, true, 5.0, true, 600.0);
 	g_iLastVoteTimeStamp = 0;
