@@ -7,7 +7,7 @@
 #pragma semicolon 1
 #pragma newdecls required
 
-#define PLUGIN_VERSION "1.00"
+#define PLUGIN_VERSION "1.0.1"
 
 #define DEBUG
 
@@ -28,8 +28,6 @@
 #define IS_INFECTED_ALIVE(%1)   (IS_VALID_INFECTED(%1) && IsPlayerAlive(%1))
 #define IS_HUMAN_SURVIVOR(%1)   (IS_VALID_HUMAN(%1) && IS_SURVIVOR(%1))
 #define IS_HUMAN_INFECTED(%1)   (IS_VALID_HUMAN(%1) && IS_INFECTED(%1))
-
-#define MAX_CLIENTS MaxClients
 
 #define CONFIG_FILENAME "l4d2_vote_blame"
 #define CONFIG_FILE "l4d2_vote_blame.cfg"
@@ -64,8 +62,6 @@ int g_iLastVoteTimeStamp;
 #if !defined _l4dh_included
 native void L4D_CTerrorPlayer_OnVomitedUpon(int client, int attacker);
 #endif
-//static bool   g_bL4D2;
-//static bool   g_bLeft4DHooks;
 
 // ====================================================================================================
 // Plugin Start
@@ -125,7 +121,7 @@ public void OnPluginStart()
 /**
 * Callback for Vote command.
 */
-public Action voteblame(int client, int args){
+Action voteblame(int client, int args){
 	if (IsPluginDisabled()){
 		return Plugin_Handled;
 	}
@@ -150,14 +146,18 @@ void VoteMenu_Select(int client)
 	menu.SetTitle("%s", "Blame who?", client);
 
 	// Build menu
-	for( int i = 1; i <= MAX_CLIENTS; i++ )
+	int i = 1;
+	char name[MAX_NAME_LENGTH];
+	char userId[10];
+	for( i = 1; i <= MaxClients; i++ )
 	{
-		if (IS_VALID_HUMAN(i)){	
-			char name[254];
+		if (IS_VALID_HUMAN(i)){
+			strcopy(name, sizeof(name), "");
+			strcopy(userId, sizeof(userId), "");  
 			GetClientName(i, name, sizeof(name));
-			char clientIndex[10];
-			Format(clientIndex, sizeof(clientIndex), "%i", i);
-			menu.AddItem(clientIndex, name);
+			int uid = GetClientUserId(i);
+			Format(userId, sizeof(userId), "%i", uid);
+			menu.AddItem(userId, name);
 		}
 	}
 
@@ -166,7 +166,7 @@ void VoteMenu_Select(int client)
 	menu.Display(client, MENU_TIME_FOREVER);
 }
 
-public int VoteMenuHandler_Select(Menu menu, MenuAction action, int client, int param2)
+int VoteMenuHandler_Select(Menu menu, MenuAction action, int client, int param2)
 {
 	switch( action )
 	{
@@ -176,24 +176,25 @@ public int VoteMenuHandler_Select(Menu menu, MenuAction action, int client, int 
 		}
 		case MenuAction_Select:
 		{
-			char clientIndex[10];
-			menu.GetItem(param2, clientIndex, sizeof(clientIndex));
+			char userId[10];
+			menu.GetItem(param2, userId, sizeof(userId));
 			
-			//DebugPrint("%s",clientIndex);
-			Callvote_Handler(StringToInt(clientIndex));
+			DebugPrint("%s", userId);
+			Callvote_Handler(StringToInt(userId));
 		}
 	}
 
 	return 0;
 }
 
-public void Callvote_Handler(int clientIndex)
+void Callvote_Handler(int userId)
 {
-	char name[30];
+	int clientIndex = GetClientOfUserId(userId);
+	char name[MAX_NAME_LENGTH];
 	GetClientName(clientIndex, name, sizeof(name));
 	char votemsg[60];
 	Format(votemsg, sizeof(votemsg), "Blame '%s'?",name);
-	g_iBlamingPlayer = clientIndex;
+	g_iBlamingPlayer = userId;
 	
 	BfWrite bf = UserMessageToBfWrite(StartMessageAll("VoteStart", USERMSG_RELIABLE));
 	bf.WriteByte(L4D2_TEAM_ALL);
@@ -220,16 +221,17 @@ public void Callvote_Handler(int clientIndex)
 	UpdateVotes();
 	CreateTimer(g_iCvarVoteTime.FloatValue, Timer_VoteCheck, TIMER_FLAG_NO_MAPCHANGE);
 }
-public Action Timer_VoteCheck(Handle timer)
+Action Timer_VoteCheck(Handle timer)
 {
 	if(VoteInProgress)
 	{
 		VoteInProgress = false;
 		UpdateVotes();
 	}
+	return Plugin_Continue;
 }
 
-public Action vote(int client, int args)
+Action vote(int client, int args)
 {
 	if(VoteInProgress && CanPlayerVote[client] == true)
 	{
@@ -253,7 +255,7 @@ public Action vote(int client, int args)
 	return Plugin_Continue;
 }
 
-public void UpdateVotes()
+void UpdateVotes()
 {
 	Event event = CreateEvent("vote_changed");
 	event.SetInt("yesVotes", g_iYesVotes);
@@ -287,16 +289,17 @@ public void UpdateVotes()
 			BfWrite bf = UserMessageToBfWrite(StartMessageAll("VotePass"));
 			bf.WriteByte(L4D2_TEAM_ALL);
 			bf.WriteString("#L4D_TargetID_Player");
-			char name[30];
-			GetClientName(g_iBlamingPlayer, name, sizeof(name));
+			char name[MAX_NAME_LENGTH];
+			int blamingClientId = GetClientOfUserId(g_iBlamingPlayer);
+			GetClientName(blamingClientId, name, sizeof(name));
 			char votemsg[60];
 			Format(votemsg, sizeof(votemsg), "'%s' got blamed!",name);
 			bf.WriteString(votemsg);
 			EndMessage();
 			
-			PrintToChat(g_iBlamingPlayer, "You got blamed!");
+			PrintToChat(blamingClientId, "You got blamed!");
 			
-			L4D_CTerrorPlayer_OnVomitedUpon(g_iBlamingPlayer, g_iBlamingPlayer);
+			L4D_CTerrorPlayer_OnVomitedUpon(blamingClientId, blamingClientId);
 		}
 		else
 		{
@@ -310,7 +313,7 @@ public void UpdateVotes()
 	}
 }
 
-public void DebugPrint(const char[] format, any...) {
+void DebugPrint(const char[] format, any...) {
 	#if defined DEBUG
 	if (!g_bCvarPrintChat.BoolValue) return;
 	
